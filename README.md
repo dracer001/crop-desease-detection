@@ -8,10 +8,14 @@ ESP32-CAM + TFT display device that captures a leaf photo on button press
 ```
 farmbot_project/
 ├── backend/
-│   ├── app.py              # Flask server, loads the model, runs predictions
-│   └── requirements.txt
+│   ├── app.py               # Flask server: model inference + history API + dashboard
+│   ├── requirements.txt
+│   ├── static/
+│   │   └── index.html       # Scan-history dashboard (served at "/")
+│   ├── uploads/              # Saved scan images (created automatically)
+│   └── farmbot.db            # SQLite scan history (created automatically)
 ├── esp32cam/
-│   └── farmbot_esp32cam.ino # ESP32-CAM firmware
+│   └── farmbot_esp32cam.ino  # ESP32-CAM firmware
 └── README.md
 ```
 
@@ -65,6 +69,27 @@ farmbot_project/
 - Type `status` / `s` in Serial Monitor to reprint the last diagnosis.
 - The idle screen always shows a summary of the last scan, so you don't
   lose the result by walking away from the device.
+
+## 4. Scan history dashboard
+Every image the ESP32-CAM uploads is now saved to `backend/uploads/` and
+logged to `backend/farmbot.db` (SQLite, created automatically — no setup
+needed). A dashboard is served by the same Flask app:
+
+```
+http://<your-backend-ip>:5000/
+```
+
+Open that in any browser on the same network. It shows:
+- Live stats (total scans, healthy/sick counts, last scan time)
+- A filterable grid (All / Healthy / Sick) of every scan, with thumbnail,
+  diagnosis, confidence, and capture time
+- Click any card for the full detail view: full-size image, raw
+  probability, inference time, device vs. server timestamps, and advice
+- "Refresh" button and an "auto-refresh" toggle (polls every 15s)
+- "Load more" pagination once you have more than 24 scans
+
+No build step or extra server is needed — it's a single static page
+served directly by `app.py`.
 
 ## How status is determined
 The backend doesn't just say "sick"/"healthy" — it buckets the model's

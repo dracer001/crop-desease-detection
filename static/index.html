@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FarmBot — Scan Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --soil:#0c1310;
+    --canopy:#141d18;
+    --canopy-2:#192722;
+    --line:#243530;
+    --frost:#eef3ee;
+    --mist:#8aa395;
+    --leaf:#5fd9a0;
+    --amber:#d4a843;
+    --good:#5fd9a0;
+    --watch:#e8d24a;
+    --mild:#e8973f;
+    --severe:#e2604f;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--soil);
+    background-image:
+      radial-gradient(ellipse at top left, rgba(95,217,160,0.05), transparent 55%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    color:var(--frost);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:rgba(12,19,16,0.92); backdrop-filter:blur(6px);
+    z-index:10; flex-wrap:wrap; gap:12px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--leaf); box-shadow:0 0 8px var(--leaf); }
+  .brand h1{ font-size:16px; margin:0; letter-spacing:0.3px; }
+  .brand span{ display:block; font-size:11px; color:var(--mist); font-family:'IBM Plex Mono', monospace; }
+  .controls{ display:flex; align-items:center; gap:10px; }
+  button{
+    font-family:'IBM Plex Mono', monospace; font-size:12px;
+    background:var(--canopy-2); color:var(--frost); border:1px solid var(--line);
+    border-radius:6px; padding:8px 12px; cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  button:hover{ border-color:var(--leaf); color:var(--leaf); }
+  button:focus-visible, a:focus-visible, .tab:focus-visible{ outline:2px solid var(--leaf); outline-offset:2px; }
+  .toggle{ display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--mist); }
+  .toggle input{ accent-color:var(--leaf); }
+
+  main{ max-width:1180px; margin:0 auto; padding:24px 28px 60px; }
+
+  /* ---------- stat strip ---------- */
+  .stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:26px; }
+  .stat{
+    background:var(--canopy); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px; position:relative; overflow:hidden;
+  }
+  .stat::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--leaf); opacity:.7; }
+  .stat .num{ font-family:'IBM Plex Mono', monospace; font-size:26px; font-weight:600; line-height:1; }
+  .stat .lbl{ font-size:11px; color:var(--mist); margin-top:6px; text-transform:uppercase; letter-spacing:0.6px; }
+  .stat.healthy::before{ background:var(--good); }
+  .stat.sick::before{ background:var(--severe); }
+  .stat.last .num{ font-size:14px; font-weight:500; }
+
+  /* ---------- filter tabs ---------- */
+  .tabbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;}
+  .tabs{ display:flex; gap:4px; background:var(--canopy); border:1px solid var(--line); border-radius:8px; padding:3px; }
+  .tab{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:7px 14px; border-radius:6px;
+    color:var(--mist); cursor:pointer; border:none; background:transparent; user-select:none;
+  }
+  .tab.active{ background:var(--canopy-2); color:var(--frost); box-shadow:inset 0 -2px 0 var(--amber); }
+  .count{ font-size:11px; color:var(--mist); font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------- grid ---------- */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:14px; }
+  .card{
+    background:var(--canopy); border:1px solid var(--line); border-radius:var(--radius);
+    overflow:hidden; cursor:pointer; transition:transform .12s, border-color .12s;
+  }
+  .card:hover{ transform:translateY(-2px); border-color:var(--leaf); }
+  .thumb{ position:relative; aspect-ratio:4/3; background:var(--canopy-2); }
+  .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .led{
+    position:absolute; top:8px; left:8px; width:9px; height:9px; border-radius:50%;
+    box-shadow:0 0 6px currentColor; border:1px solid rgba(0,0,0,0.3);
+  }
+  .pill{
+    position:absolute; bottom:8px; left:8px; right:8px;
+    background:rgba(12,19,16,0.78); backdrop-filter:blur(2px);
+    border-radius:6px; padding:6px 8px; font-size:11px;
+  }
+  .pill .label{ font-weight:600; }
+  .pill .conf{ font-family:'IBM Plex Mono', monospace; color:var(--mist); margin-top:2px; }
+  .meta{ padding:9px 10px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--mist); display:flex; justify-content:space-between; }
+
+  .loadmore{ display:flex; justify-content:center; margin-top:22px; }
+
+  /* ---------- empty / loading ---------- */
+  .empty{
+    text-align:center; padding:70px 20px; color:var(--mist); border:1px dashed var(--line);
+    border-radius:var(--radius); font-family:'IBM Plex Mono', monospace; font-size:13px;
+  }
+  .empty strong{ display:block; color:var(--frost); font-family:'IBM Plex Sans',sans-serif; font-size:16px; margin-bottom:6px; }
+
+  /* ---------- modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(8,12,10,0.78); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; padding:20px; z-index:50;
+  }
+  .overlay.open{ display:flex; }
+  .modal{
+    background:var(--canopy); border:1px solid var(--line); border-radius:14px;
+    max-width:760px; width:100%; max-height:88vh; overflow:auto;
+    display:grid; grid-template-columns:1fr 1fr;
+  }
+  @media (max-width:640px){ .modal{ grid-template-columns:1fr; } }
+  .modal img{ width:100%; height:100%; object-fit:cover; display:block; min-height:220px; }
+  .modal-body{ padding:20px; position:relative; }
+  .modal-close{ position:absolute; top:12px; right:12px; }
+  .modal-title{ font-size:18px; font-weight:600; margin:0 0 2px; }
+  .modal-sub{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--mist); margin-bottom:16px; }
+  .row{ display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--line); font-family:'IBM Plex Mono', monospace; font-size:12px; }
+  .row span:first-child{ color:var(--mist); }
+  .advice{ margin-top:14px; padding:12px; background:var(--canopy-2); border-radius:8px; font-size:13px; line-height:1.5; }
+  .advice b{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--mist); margin-bottom:6px; font-family:'IBM Plex Mono', monospace; }
+
+  @media (prefers-reduced-motion: reduce){
+    .card{ transition:none; }
+  }
+  @media (max-width:700px){
+    .stats{ grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>FarmBot</h1>
+      <span>Cassava leaf scan log</span>
+    </div>
+  </div>
+  <div class="controls">
+    <label class="toggle"><input type="checkbox" id="autoRefresh"> auto-refresh</label>
+    <button id="refreshBtn">↻ Refresh</button>
+  </div>
+</header>
+
+<main>
+  <section class="stats" id="stats">
+    <div class="stat"><div class="num mono" id="statTotal">—</div><div class="lbl">Total scans</div></div>
+    <div class="stat healthy"><div class="num mono" id="statHealthy">—</div><div class="lbl">Healthy</div></div>
+    <div class="stat sick"><div class="num mono" id="statSick">—</div><div class="lbl">Sick</div></div>
+    <div class="stat last"><div class="num mono" id="statLast">—</div><div class="lbl">Last scan</div></div>
+  </section>
+
+  <div class="tabbar">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-status="all">All</button>
+      <button class="tab" data-status="healthy">Healthy</button>
+      <button class="tab" data-status="sick">Sick</button>
+    </div>
+    <div class="count" id="resultCount"></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="loadmore" id="loadmoreWrap" style="display:none;">
+    <button id="loadmoreBtn">Load more</button>
+  </div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+const LIMIT = 24;
+let state = { status: 'all', offset: 0, items: [], total: 0, loading: false };
+
+const grid = document.getElementById('grid');
+const loadmoreWrap = document.getElementById('loadmoreWrap');
+const resultCount = document.getElementById('resultCount');
+
+const COLOR_MAP = { green:'var(--good)', yellow:'var(--watch)', orange:'var(--mild)', red:'var(--severe)' };
+
+function fmtTime(item){
+  return item.device_time && item.device_time.length > 0 ? item.device_time : item.server_time;
+}
+
+async function fetchStats(){
+  const res = await fetch('/api/stats');
+  const d = await res.json();
+  document.getElementById('statTotal').textContent = d.total;
+  document.getElementById('statHealthy').textContent = `${d.healthy} (${d.healthy_pct}%)`;
+  document.getElementById('statSick').textContent = `${d.sick} (${d.sick_pct}%)`;
+  document.getElementById('statLast').textContent = d.last_scan_time || '—';
+}
+
+async function fetchHistory(reset){
+  if(state.loading) return;
+  state.loading = true;
+  if(reset){ state.offset = 0; state.items = []; grid.innerHTML = ''; }
+
+  const url = `/api/history?status=${state.status}&limit=${LIMIT}&offset=${state.offset}`;
+  const res = await fetch(url);
+  const d = await res.json();
+
+  state.items = state.items.concat(d.items);
+  state.total = d.total;
+  state.offset += d.items.length;
+  state.loading = false;
+
+  renderGrid(d.items, !reset);
+  resultCount.textContent = `${state.items.length} of ${d.total}`;
+  loadmoreWrap.style.display = state.offset < d.total ? 'flex' : 'none';
+
+  if(state.items.length === 0){
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <strong>No scans logged yet</strong>
+      Trigger a capture from the FarmBot device to start the log.
+    </div>`;
+  }
+}
+
+function renderGrid(items, append){
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="thumb">
+        <img src="${item.image_url}" alt="${item.label}" loading="lazy">
+        <span class="led" style="color:${COLOR_MAP[item.color] || 'var(--mist)'}; background:${COLOR_MAP[item.color] || 'var(--mist)'}"></span>
+        <div class="pill">
+          <div class="label">${item.label}</div>
+          <div class="conf">${item.confidence}% confidence</div>
+        </div>
+      </div>
+      <div class="meta"><span>${fmtTime(item)}</span><span>#${item.id}</span></div>
+    `;
+    card.addEventListener('click', () => openModal(item));
+    grid.appendChild(card);
+  });
+}
+
+function openModal(item){
+  const modal = document.getElementById('modal');
+  const overlay = document.getElementById('overlay');
+  modal.innerHTML = `
+    <img src="${item.image_url}" alt="${item.label}">
+    <div class="modal-body">
+      <button class="modal-close" id="closeModal">✕</button>
+      <h2 class="modal-title" style="color:${COLOR_MAP[item.color] || 'var(--frost)'}">${item.label}</h2>
+      <div class="modal-sub">Scan #${item.id} · ${fmtTime(item)}</div>
+
+      <div class="row"><span>Status</span><span>${item.status} (${item.severity})</span></div>
+      <div class="row"><span>Confidence</span><span>${item.confidence}%</span></div>
+      <div class="row"><span>Raw score</span><span>${item.probability}</span></div>
+      <div class="row"><span>Inference time</span><span>${item.inference_ms} ms</span></div>
+      <div class="row"><span>Device time</span><span>${item.device_time || '—'}</span></div>
+      <div class="row"><span>Server time</span><span>${item.server_time}</span></div>
+
+      <div class="advice"><b>Advice</b>${item.advice}</div>
+    </div>
+  `;
+  overlay.classList.add('open');
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', escClose);
+}
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+  document.removeEventListener('keydown', escClose);
+}
+function escClose(e){ if(e.key === 'Escape') closeModal(); }
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    state.status = tab.dataset.status;
+    fetchHistory(true);
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  fetchStats();
+  fetchHistory(true);
+});
+document.getElementById('loadmoreBtn').addEventListener('click', () => fetchHistory(false));
+
+let autoTimer = null;
+document.getElementById('autoRefresh').addEventListener('change', (e) => {
+  if(e.target.checked){
+    autoTimer = setInterval(() => { fetchStats(); fetchHistory(true); }, 15000);
+  } else {
+    clearInterval(autoTimer);
+  }
+});
+
+fetchStats();
+fetchHistory(true);
+</script>
+</body>
+</html>
